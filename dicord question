@@ -1,0 +1,88 @@
+
+Hi TheJesse#9861, Remi#9464 I'm trying to implement the code to allow a server pay for client transacctions so I've  followed  code from your thread  'server side signing' (https://discord.com/channels/864852288002850866/1002890074628837396), but I'm stucked getting this error:
+```Error!!!, ReferenceError: _ is not defined```
+at client code, on following line:
+  ```const signatureData = Buffer.from(await transaction.getSignatureData())```
+  
+I've adapted the code from both yours and Remi#9464 previous examples pretty straight forward way, in a fresh new nextjs App. I upgradeded @bundlr-network/client from : 0.8.5 to 0.8.6 but same result. Please can you see what's the problem?
+
+This is my code, I've added console prints to it:
+
+SERVER CODE
+```
+//bundlrsrv.js
+import Bundlr from "@bundlr-network/client/";
+
+const key = process.env.POLYGON_MUMBAI_PVK_ACCOUNT // your private key
+export let serverBundlr
+export let presignedHash
+
+export async function serverInit() {
+    // const publicKey = serverBundlr.currencyConfig.getSigner().publicKey
+     serverBundlr = new Bundlr("https://devnet.bundlr.network", "matic", key)
+     await serverBundlr.ready();
+     presignedHash = Buffer.from(
+        await serverBundlr.currencyConfig.sign(
+          "sign this message to connect to Bundlr.Network"
+        )
+      ).toString("hex");
+}
+
+
+// api/presignedhash.js
+
+import { serverBundlr, presignedhash, printBalance, presignedHash ,serverInit } from "../../web3/arweave/bundlrsrv"
+
+export default async function handler(req, res) {
+  await serverInit()
+  console.log('predesignhash', presignedHash)
+  res.status(200).send( {presignedHash} )
+}
+```
+
+CLIENT CODE
+```
+// client code 
+	
+const handleinitBundrl = async() => {
+  console.log('client presignedhash')
+  const result = await fetch('/api/presignedhash',{method: 'GET'})
+  const data = await result.json()
+  const presignedHash = Buffer.from(data.presignedHash,'hex')
+  console.log('presignedHash:', presignedHash)  
+  	// this print:  {"type": "Buffer","data": [ 113,132,185,55,20,71,...252,160,28]}
+  const provider = {
+    getSigner: () => {
+        return {
+            signMessage: () => {
+                return presignedHash
+            }
+        }
+    }
+  }
+  const bundlr = new WebBundlr("https://devnet.bundlr.network", "matic", provider);
+  await bundlr.ready()
+  console.log('bundlr ready:',bundlr.address)
+  // this prints: bundlr ready: 0xe9b1436262593fa862911edd0c78017b77d131ab
+    //tags
+    const tags = [{ name: "Type", value: "manifest" }, { name: "Content-Type", value: "application/x.arweave-manifest+json" }];
+    // example data (manifest)
+   // example data (manifest)
+   const manifest = {
+    manifest: "arweave/paths",
+    version: "0.1.0",
+    paths: {
+      "basten.jpg": { id: "cu2RWNO8T6t2zZ6f9FTIY5S_GY5A19jWfGp-fKBEAxk" },
+    },
+  };
+    const transaction = bundlr.createTransaction(JSON.stringify(manifest), { tags });
+    console.log('transaction', transaction)
+    // this prints transaction BundlrTransaction {binary: Uint8Array(369), bundlr: WebBundlr, signer: InjectedEthereumSigner}
+    try {
+    const signatureData = Buffer.from(await transaction.getSignatureData())
+    console.log('signatureData',signatureData)
+    } catch (error){ console.log('Error!!!,',error)}
+ ```
+
+ 
+    
